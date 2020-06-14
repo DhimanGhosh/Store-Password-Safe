@@ -12,7 +12,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.fernet import Fernet
 
-#os.chdir(os.path.realpath('Store-Password-Safe'))
 root_dir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(root_dir)
 from Utils.DataStructures_Similarity import DS_Similarity
@@ -45,7 +44,6 @@ class Utils:
         )
         key = base64.urlsafe_b64encode(kdf.derive(password))
         with open('key_{}.pkl'.format(user), 'wb') as f:
-            #print(f"Key to write: {key}")
             pickle.dump(key, f)
         return key
 
@@ -88,7 +86,6 @@ class Account_Management:
 
     def add_user(self, user='admin', password='admin'): # Check for password can't be empty while adding 'user'
         self.__user_credentials = {user : password}
-        #print(f"self.__user_credentials: {self.__user_credentials}")
         key = self.__utils.keygen(user=self.__app, password=self.__app)
         if not glob('encrypted_{}.pkl'.format(self.__app)): # Create 'StorePasswordSafe' and add 'admin' credentials
             data = {self.__app : [self.__user_credentials], "Users" : {}}
@@ -102,7 +99,6 @@ class Account_Management:
                 existing_account_details[self.__app].append(self.__user_credentials)
                 existing_account_details["Users"][user] = {}
                 print(f"User {user} Added Successfully!")
-            #print(f"existing_account_details: {existing_account_details}")
             self.encrypt_and_store(data=existing_account_details, key=key, encrypt_file=self.__app)
 
     def verify_user(self, user, password):
@@ -130,7 +126,6 @@ class Account_Management:
                     if glob('key_{}.pkl'.format(user)):
                         os.remove('key_{}.pkl'.format(user))
                     print(f"User {user} Removed Successfully!")
-                    #print(f"existing_account_details: {existing_account_details}")
                     self.encrypt_and_store(data=existing_account_details, key=key, encrypt_file=self.__app)
             else:
                 print(f'Incorrect Password for {user}')
@@ -334,12 +329,10 @@ class Account_Management:
             ch_id_pwd = input('\n\tWhat to change? (I/P): ').lower()
             if ch_id_pwd in self.__id_list:
                 new_id = input('\n\tNew App ID: ')
-                # app_user_new_credentials = {new_id : sel_app_password}
                 self.remove_app_credentials(user=user, password=password, app_name=selected_app, old_credentials={sel_app_id : sel_app_password}, from_change_app_credentials=True)
                 self.add_user_app_data(user=user, password=password, app_name=selected_app, app_id=new_id, app_password=sel_app_password, from_change_app_credentials=True)
             elif ch_id_pwd in self.__password_list:
                 new_password = getpass('\n\tNew App Password: ', mask='*')
-                # app_user_new_credentials = {sel_app_id : new_password}
                 self.remove_app_credentials(user=user, password=password, app_name=selected_app, old_credentials={sel_app_id : sel_app_password}, from_change_app_credentials=True)
                 self.add_user_app_data(user=user, password=password, app_name=selected_app, app_id=sel_app_id, app_password=new_password, from_change_app_credentials=True)
 
