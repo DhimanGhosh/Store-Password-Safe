@@ -1,10 +1,9 @@
 # Store-Password-Safe
-> Think of what you can do with your voice.... Thinking of a Voice Assistant?
+> No need to remember Website/App ID and Passwords. Store here safely.
 
 This app lets you:
-- Ease your work while looking for any notes, scales, chords, etc.
-- Shifting of chords with change of scale
-- (Only for Guitar Players) Best Capo Position for difficult chords to make a easy play
+- Store your App/Website name along with ID & Password securely
+- Since this is a Client-Server based model all the data are safe with us (server) but the key is with you (client)
 
 ## How to run it
 
