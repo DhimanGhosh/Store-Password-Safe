@@ -1,0 +1,45 @@
+{
+    "StorePasswordSafe": [
+        {
+            "admin": "admin"
+        },
+        {
+            "user1": "pwd1"
+        },
+        {
+            "user2": "pwd2"
+        }
+    ],
+    "Users": {
+        "user1": {
+            "facebook": [
+                {
+                    "fbid1": "pwd1"
+                },
+                {
+                    "fbid2": "pwd2"
+                }
+            ],
+            "twitter": [
+                {
+                    "twid1": "pwd1"
+                }
+            ]
+        },
+        "user2": {
+            "facebook": [
+                {
+                    "fbid1": "pwd1"
+                }
+            ],
+            "instagram": [
+                {
+                    "instaid1": "pwd1"
+                },
+                {
+                    "instaid2": "pwd2"
+                }
+            ]
+        }
+    }
+}
