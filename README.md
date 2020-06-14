@@ -13,13 +13,11 @@ This app lets you:
 	```
 2. Clone this repo:
 
-		$ git clone https://github.com/DhimanGhosh/Music-Theory-Guide.git
+		$ git clone https://github.com/DhimanGhosh/Store-Password-Safe.git
 
 
 3. Open terminal / cmd and go to that cloned path:
 
 		$ install_dependencies.sh
 		$ python app.py (For CLI Execution)
-		$ cd ./GUI_QT/
-		$ python MusicTheoryGuide.py (For Interactive GUI)
 
