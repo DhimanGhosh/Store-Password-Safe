@@ -5,6 +5,7 @@ import base64
 import ast
 import pickle
 import os
+import random
 from stdiomask import getpass
 from glob import glob
 from cryptography.hazmat.backends import default_backend
@@ -18,6 +19,7 @@ from Utils.DataStructures_Similarity import DS_Similarity
 from Utils.Data_Format import Account_Format
 
 __app__ = 'StorePasswordSafe'
+retry = 3
 
 class Utils:
     def __init__(self):
@@ -82,30 +84,33 @@ class Account_Management:
         self.__id_list = ['i', 'id']
         self.__password_list = ['p', 'pwd', 'pass', 'password']
         self.__utils = Utils()
+        with open(root_dir + os.sep + 'assets' + os.sep + 'recovery_Q.txt', 'r') as f:
+            recovery_Q = f.readlines()
+        self.__recovery_Q = [question.strip('\n') for question in recovery_Q]
         self.add_user()
 
-    def add_user(self, user='admin', password='admin'): # Check for password can't be empty while adding 'user'
-        self.__user_credentials = {user : password}
+    def add_user(self, user='admin', password='admin', recovery_Q='', recovery_A=''): # Check for password can't be empty while adding 'user'
+        self.__user_credentials = {user : {"password" : password, "recovery_Q" : recovery_Q, "recovery_A" : recovery_A}}
         key = self.__utils.keygen(user=self.__app, password=self.__app)
         if not glob('encrypted_{}.pkl'.format(self.__app)): # Create 'StorePasswordSafe' and add 'admin' credentials
-            data = {self.__app : [self.__user_credentials], "Users" : {}}
+            data = {self.__app : {user : self.__user_credentials[user]}, "Users" : {}}
             self.encrypt_and_store(data=data, key=key, encrypt_file=self.__app)
         else: # open and append 'user' credentials
             existing_account_details = self.decrypt_and_retrieve(key=key, encrypt_file=self.__app)
-            if any(user in credentials.keys() for credentials in existing_account_details[self.__app]): # 'user' exist
-                if user != 'admin':
-                    print(f"User {user} exist!")
+            users = list(existing_account_details[self.__app].keys())
+            if user in users and user != 'admin':
+                print(f"User {user} exist!")
             else:
-                existing_account_details[self.__app].append(self.__user_credentials)
+                existing_account_details[self.__app][user] = self.__user_credentials[user]
                 existing_account_details["Users"][user] = {}
                 print(f"User {user} Added Successfully!")
             self.encrypt_and_store(data=existing_account_details, key=key, encrypt_file=self.__app)
 
     def verify_user(self, user, password):
-        user_credentials = {user : password}
         existing_account_details = self.decrypt_and_retrieve(key=self.__utils.keygen(user=self.__app, password=self.__app), encrypt_file=self.__app)
-        if any(user in credentials.keys() for credentials in existing_account_details[self.__app]): # 'user' exist
-            if any(credentials == user_credentials for credentials in existing_account_details[self.__app]): # 'password' matched -->> # Proceed for Login
+        users = list(existing_account_details[self.__app].keys())
+        if user in users: # 'user' exist
+            if existing_account_details[self.__app][user]['password'] == password: # 'password' matched
                 return (True, 'Credentials Matched')
             else:
                 return (False, f'Incorrect Password for {user}')
@@ -113,13 +118,13 @@ class Account_Management:
             return (False, f'{user} does not exist!')
 
     def remove_user(self, user, password): # Remove User data along with user
-        user_credentials = {user : password}
         key = self.__utils.keygen(user=self.__app, password=self.__app)
         existing_account_details = self.decrypt_and_retrieve(key=key, encrypt_file=self.__app)
-        if any(user in credentials.keys() for credentials in existing_account_details[self.__app]): # 'user' exist
-            if any(credentials == user_credentials for credentials in existing_account_details[self.__app]): # 'password' matched
+        users = list(existing_account_details[self.__app].keys())
+        if user in users: # 'user' exist
+            if existing_account_details[self.__app][user]['password'] == password: # 'password' matched
                 if user in existing_account_details["Users"].keys() and user != 'admin': # to prevent deleting 'admin' data
-                    existing_account_details[self.__app].remove(user_credentials)
+                    del existing_account_details[self.__app][user]
                     del existing_account_details["Users"][user]
                     if glob('encrypted_{}.pkl'.format(user)):
                         os.remove('encrypted_{}.pkl'.format(user))
@@ -147,23 +152,33 @@ class Account_Management:
         decrypted_data = fernet.decrypt(encrypted_data)
         return ast.literal_eval(decrypted_data.decode())
 
-    def user_input(self):
+    def user_input(self, recovery=False): #NOTE: Give support for multiple questions
         while True:
             user = input('Enter Username:\t')
             pwd = getpass('Enter Password:\t', mask='*')
-            if user == '' or pwd == '':
-                print('Username/Password cannot be empty!')
+            if recovery:
+                recovery_Q = self.__recovery_Q[random.randint(0, len(self.__recovery_Q) - 1)]
+                recovery_A = input(f'Recovery Question:\t{recovery_Q}\nRecovery Answer:\t').lower()
+            if not recovery and (user == '' or pwd == ''):
+                print('Username / Password cannot be empty!')
+                continue
+            elif recovery and (user == '' or pwd == '' or recovery_A == ''):
+                print('Username / Password / Recovery-Answer cannot be empty!')
                 continue
             break
-        return (user, pwd)
+        if not recovery:
+            return (user, pwd)
+        else:
+            return (user, pwd, recovery_Q, recovery_A)
 
     def register(self):
         print('\n-- REGISTER --')
-        user, password = self.user_input()
-        self.add_user(user=user, password=password)
+        user, password, recovery_Q, recovery_A = self.user_input(recovery=True)
+        self.add_user(user=user, password=password, recovery_Q=recovery_Q, recovery_A=recovery_A)
         self.login(user=user, password=password, from_reg=True)
 
     def login(self, user='', password='', from_reg=False, after_sub_task=False):
+        global retry
         if user == '' or password == '':
             print('\n-- LOGIN --')
             user, password = self.user_input()
@@ -176,8 +191,19 @@ class Account_Management:
         else:
             print(verify_user[1])
             if 'Incorrect Password' in verify_user[1]:
-                user, password = self.user_input()
-                self.login(user=user, password=password)
+                new_password = ''
+                while retry > 1:
+                    rec_login = input('Recover Account / Try Login Again? (R/L): ').lower()
+                    if rec_login == 'r':
+                        new_password = self.recover_account(user=user) # Password Recovery
+                        break
+                    elif rec_login == 'l':
+                        retry -= 1
+                        self.login()
+                retry = 3
+                if new_password == '':
+                    new_password = self.recover_account(user=user)
+                self.login(user=user, password=new_password)
             elif 'does not exist' in verify_user[1]:
                 self.register()
         d = Driver()
@@ -191,9 +217,8 @@ class Account_Management:
             ch = int(input(admin_menu + '\nEnter Choice: '))
             if 1 <= ch <= 4: # valid choice
                 if ch == 1:
-                    key = self.__utils.keygen(user=self.__app, password=self.__app)
-                    existing_account_details = self.decrypt_and_retrieve(key=key, encrypt_file=self.__app)
-                    users_list = [list(credentials.keys())[0] for credentials in existing_account_details[self.__app]]
+                    existing_account_details = self.decrypt_and_retrieve(key=self.__utils.keygen(user=self.__app, password=self.__app), encrypt_file=self.__app)
+                    users_list = list(existing_account_details[self.__app].keys())
                     if 'admin' in users_list:
                         users_list.remove('admin')
                     print(f'\n\t-- Users --')
@@ -204,9 +229,8 @@ class Account_Management:
                         print('\tNo Users Found!')
                     self.login(user=user, password=password, after_sub_task=True)
                 elif ch == 2:
-                    key = self.__utils.keygen(user=self.__app, password=self.__app)
-                    existing_account_details = self.decrypt_and_retrieve(key=key, encrypt_file=self.__app)
-                    users_list = [list(credentials.keys())[0] for credentials in existing_account_details[self.__app]]
+                    existing_account_details = self.decrypt_and_retrieve(key=self.__utils.keygen(user=self.__app, password=self.__app), encrypt_file=self.__app)
+                    users_list = list(existing_account_details[self.__app].keys())
                     if 'admin' in users_list:
                         users_list.remove('admin')
                     print(f'\n\t-- Users --')
@@ -216,13 +240,7 @@ class Account_Management:
                         user_choice_to_remove = int(input('\nEnter Choice: '))
                         if 1 <= user_choice_to_remove <= len(users_list):
                             user_to_remove = users_list[user_choice_to_remove - 1]
-                            key = self.__utils.keygen(user=self.__app, password=self.__app)
-                            existing_account_details = self.decrypt_and_retrieve(key=key, encrypt_file=self.__app)
-                            for credentials in existing_account_details[self.__app]:
-                                if user_to_remove in list(credentials.keys())[0]:
-                                    user_creds = credentials
-                                    break
-                            self.remove_user(user=user_to_remove, password=user_creds[user_to_remove])
+                            self.remove_user(user=user_to_remove, password=existing_account_details[user_to_remove]['password'])
                     else:
                         print('\tNo Users Found!')
                     self.login(user=user, password=password, after_sub_task=True)
@@ -379,7 +397,7 @@ class Account_Management:
     def change_user_password(self, user, old_password):
         if self.verify_user(user=user, password=old_password)[0]:
             while True:
-                new_password = getpass('\ttNew Password:\t', mask='*')
+                new_password = getpass('\tNew Password:\t', mask='*')
                 if new_password == '':
                     print('\tNew Password cannot be empty')
                     continue
@@ -387,22 +405,38 @@ class Account_Management:
                     print('\tNew Password cannot be same as old')
                     continue
                 break
-            key = self.__utils.keygen(user=self.__app, password=self.__app)
-            existing_account_details = self.decrypt_and_retrieve(key=key, encrypt_file=self.__app)
-            creds = existing_account_details[self.__app]
-            for i in range(len(creds)):
-                user_id, user_password = list(creds[i].items())[0]
-                if user_id == user or user_password == old_password:
-                    existing_account_details[self.__app][i][user] = new_password
+            existing_account_details = self.decrypt_and_retrieve(key=self.__utils.keygen(user=self.__app, password=self.__app), encrypt_file=self.__app)
+            users = existing_account_details[self.__app]
+            for u in users:
+                if u == user:
+                    existing_account_details[self.__app][user]['password'] = new_password
                     break
-            self.encrypt_and_store(data=existing_account_details, key=key, encrypt_file=self.__app)
+            self.encrypt_and_store(data=existing_account_details, key=self.__utils.keygen(user=self.__app, password=self.__app), encrypt_file=self.__app)
             return new_password
 
-    def password_hint(self): ## INCOMPLETE #NOTE: Store Password hint (Q & A) for each user (controlled by admin)
-        pass
-
-    def recover_password(self): ## INCOMPLETE #NOTE: Store Password hint (Q & A) for each user (controlled by admin)
-        pass
+    def recover_account(self, user):
+        global retry
+        existing_account_details = self.decrypt_and_retrieve(key=self.__utils.keygen(user=self.__app, password=self.__app), encrypt_file=self.__app)
+        recovery_Q = existing_account_details[self.__app][user]['recovery_Q']
+        print('\n-- Recover Account --')
+        new_password = ''
+        while retry > 0:
+            recovery_A = input(f'Recovery Question:\t{recovery_Q}\nRecovery Answer:\t').lower()
+            if recovery_A == '':
+                print('nRecovery Answer cannot be empty!')
+                continue
+            else:
+                if existing_account_details[self.__app][user]['recovery_A'] == recovery_A:
+                    new_password = self.change_user_password(user=user, old_password=existing_account_details[self.__app][user]['password'])
+                    break
+                retry -= 1
+        retry = 3
+        if new_password != '':
+            print('Your Password changed successfully!\nLogging in...')
+        else: ## INCOMPLETE #NOTE: Incorrect 'Recovery Answer' -->> Email Option / answer another question asked during registration
+            print('Email / Multiple Question Option pending implementation for incorrect Recovery Answer!\nNow using old password from database...')
+            new_password = existing_account_details[self.__app][user]['password']
+        return new_password
 
 
 class Driver:
