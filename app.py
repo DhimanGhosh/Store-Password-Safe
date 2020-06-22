@@ -6,6 +6,7 @@ import ast
 import pickle
 import os
 import random
+import smtplib
 from stdiomask import getpass
 from glob import glob
 from cryptography.hazmat.backends import default_backend
@@ -89,8 +90,9 @@ class Account_Management:
         self.__recovery_Q = [question.strip('\n') for question in recovery_Q]
         self.add_user()
 
-    def add_user(self, user='admin', password='admin', recovery_Q='', recovery_A=''): # Check for password can't be empty while adding 'user'
-        self.__user_credentials = {user : {"password" : password, "recovery_Q" : recovery_Q, "recovery_A" : recovery_A}}
+    def add_user(self, user='admin', password='admin', recovery_Q='', recovery_A='', recovery_Email=''): # Check for password can't be empty while adding 'user'
+        ## INCOMPLETE #NOTE:Store email id and verify using otp
+        self.__user_credentials = {user : {"password" : password, "recovery_Q" : recovery_Q, "recovery_A" : recovery_A, "recovery_Email" : recovery_Email}}
         key = self.__utils.keygen(user=self.__app, password=self.__app)
         if not glob('encrypted_{}.pkl'.format(self.__app)): # Create 'StorePasswordSafe' and add 'admin' credentials
             data = {self.__app : {user : self.__user_credentials[user]}, "Users" : {}}
@@ -115,7 +117,7 @@ class Account_Management:
             else:
                 return (False, f'Incorrect Password for {user}')
         else:
-            return (False, f'{user} does not exist!')
+            return (False, f'Invalid username!')
 
     def remove_user(self, user, password): # Remove User data along with user
         key = self.__utils.keygen(user=self.__app, password=self.__app)
@@ -158,26 +160,38 @@ class Account_Management:
             pwd = getpass('Enter Password:\t', mask='*')
             if recovery:
                 recovery_Q = self.__recovery_Q[random.randint(0, len(self.__recovery_Q) - 1)]
-                recovery_A = input(f'Recovery Question:\t{recovery_Q}\nRecovery Answer:\t').lower()
+                recovery_A = input(f'Recovery Question:\t\t{recovery_Q}\nRecovery Answer:\t\t').lower()
+                recovery_Email = input(f'Recovery Email ID:\t\t').lower()
             if not recovery and (user == '' or pwd == ''):
                 print('Username / Password cannot be empty!')
                 continue
-            elif recovery and (user == '' or pwd == '' or recovery_A == ''):
-                print('Username / Password / Recovery-Answer cannot be empty!')
+            elif recovery and (user == '' or pwd == '' or recovery_A == '' or recovery_Email == ''):
+                print('Username / Password / Recovery-Answer / Recovery Email cannot be empty!')
                 continue
             break
         if not recovery:
             return (user, pwd)
         else:
-            return (user, pwd, recovery_Q, recovery_A)
+            OTP_generated = self.generateOTP()
+            self.send_email(otp=OTP_generated, receiver_mail_id=recovery_Email)
+            #print(f'OTP to send through mail: {OTP_generated}') ## INCOMPLETE: #NOTE: Send OTP through email
+            OTP_verify = input(f'Enter the OTP received on Email:\t').strip()
+            if OTP_generated == OTP_verify:
+                print(f'Email {recovery_Email} verified!')
+            else:
+                #print('Incorrect OTP Entered!\nYou can only recover account with Recovery Answer!')
+                print('Incorrect OTP Entered!\nTry Registering again!')
+                #recovery_Email = ''
+                self.user_input(recovery=True)
+            return (user, pwd, recovery_Q, recovery_A, recovery_Email)
 
-    def register(self):
+    def register(self): ## INCOMPLETE #NOTE: Accept email id and verify using otp
         print('\n-- REGISTER --')
-        user, password, recovery_Q, recovery_A = self.user_input(recovery=True)
-        self.add_user(user=user, password=password, recovery_Q=recovery_Q, recovery_A=recovery_A)
+        user, password, recovery_Q, recovery_A, recovery_Email = self.user_input(recovery=True)
+        self.add_user(user=user, password=password, recovery_Q=recovery_Q, recovery_A=recovery_A, recovery_Email=recovery_Email)
         self.login(user=user, password=password, from_reg=True)
 
-    def login(self, user='', password='', from_reg=False, after_sub_task=False):
+    def login(self, user='', password='', from_reg=False, after_sub_task=False): #NOTE: for invalid user (Re-Login / Register)
         global retry
         if user == '' or password == '':
             print('\n-- LOGIN --')
@@ -204,7 +218,7 @@ class Account_Management:
                 if new_password == '':
                     new_password = self.recover_account(user=user)
                 self.login(user=user, password=new_password)
-            elif 'does not exist' in verify_user[1]:
+            elif 'Invalid username' in verify_user[1]:
                 self.register()
         d = Driver()
         if user == 'admin':
@@ -240,7 +254,7 @@ class Account_Management:
                         user_choice_to_remove = int(input('\nEnter Choice: '))
                         if 1 <= user_choice_to_remove <= len(users_list):
                             user_to_remove = users_list[user_choice_to_remove - 1]
-                            self.remove_user(user=user_to_remove, password=existing_account_details[user_to_remove]['password'])
+                            self.remove_user(user=user_to_remove, password=existing_account_details[self.__app][user_to_remove]['password'])
                     else:
                         print('\tNo Users Found!')
                     self.login(user=user, password=password, after_sub_task=True)
@@ -434,10 +448,32 @@ class Account_Management:
         if new_password != '':
             print('Your Password changed successfully!\nLogging in...')
         else: ## INCOMPLETE #NOTE: Incorrect 'Recovery Answer' -->> Email Option / answer another question asked during registration
-            print('Email / Multiple Question Option pending implementation for incorrect Recovery Answer!\nNow using old password from database...')
-            new_password = existing_account_details[self.__app][user]['password']
+            if existing_account_details[self.__app][user]['recovery_Email'] != '':
+                OTP_generated = self.generateOTP()
+                self.send_email(otp=OTP_generated, receiver_mail_id=existing_account_details[self.__app][user]['recovery_Email'])
+                #print(f'OTP to send through mail: {OTP_generated}') ## INCOMPLETE: #NOTE: Send OTP through email
+                OTP_verify = input(f'Enter the OTP received on Email {existing_account_details[self.__app][user]["recovery_Email"]}:\t').strip()
+                if OTP_generated == OTP_verify:
+                    new_password = self.change_user_password(user=user, old_password=existing_account_details[self.__app][user]['password'])
+                else:
+                    print('Incorrect OTP Entered!')
+            else:#NOTE: Handle null password after this; if recovery email not verified for user (will not get stored) [they will need to re-register if OTP not verified]
+                print('Recovery Email Not found!\nUnable to to recover Account!')
         return new_password
 
+    def generateOTP(self):
+        l = [str(n) for n in range(1,10)]
+        random.shuffle(l)
+        return ''.join(l[:6])
+
+    def send_email(self, otp, receiver_mail_id): #NOTE: Email validilty; Email structure correction; email duplicacy check
+        s = smtplib.SMTP(host='smtp.gmail.com', port=587, timeout=30)
+        s.starttls()
+        admin_mail_id = 'pythonmaildg@gmail.com'
+        admin_mail_pwd = 'kolkata420'
+        s.login(admin_mail_id, admin_mail_pwd)
+        s.sendmail(admin_mail_id, receiver_mail_id, otp)
+        s.quit()
 
 class Driver:
     def run(self): # APP Home Screen
