@@ -470,10 +470,11 @@ class Account_Management:
         s = smtplib.SMTP(host='smtp.gmail.com', port=587, timeout=30)
         s.starttls()
         admin_mail_id = 'pythonmaildg@gmail.com'
-        admin_mail_pwd = 'kolkata420'
+        admin_mail_pwd = 'startup4few4'
         s.login(admin_mail_id, admin_mail_pwd)
         s.sendmail(admin_mail_id, receiver_mail_id, otp)
         s.quit()
+
 
 class Driver:
     def run(self): # APP Home Screen
@@ -496,6 +497,7 @@ class Driver:
             elif lr == 3: # exit app
                 print('Good Bye!')
                 exit()
+
 
 if __name__ == "__main__":
     os.chdir(root_dir + os.sep + 'assets')
