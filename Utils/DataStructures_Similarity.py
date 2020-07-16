@@ -29,8 +29,6 @@ class DS_Similarity:
 
     def __list_sim(self, list1, list2):
         flag = True
-        list1.sort()
-        list2.sort()
         if len(list1) == len(list2):
             for i in range(len(list1)):
                 if type(list1[i]).__name__ == type(list2[i]).__name__:
@@ -58,4 +56,3 @@ class DS_Similarity:
         else:
             flag = False
         return flag
-
